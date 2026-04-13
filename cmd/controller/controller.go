@@ -292,7 +292,6 @@ func (c *command) start(ctx context.Context, flags *config.ControllerOptions, de
 			K0sVars:      c.K0sVars,
 			LogLevel:     c.LogLevels.Konnectivity,
 			EventEmitter: prober.NewEventEmitter(),
-			ServerCount:  numActiveControllers.Peek,
 		})
 	}
 
@@ -554,7 +553,6 @@ func (c *command) start(ctx context.Context, flags *config.ControllerOptions, de
 			ManifestsDir:           c.K0sVars.ManifestsDir,
 			KonnectivityServerHost: cmp.Or(nodeConfig.Spec.API.ExternalHost(), nodeConfig.Spec.API.Address),
 			EventEmitter:           prober.NewEventEmitter(),
-			ServerCount:            numActiveControllers.Peek,
 		})
 	}
 

@@ -23,7 +23,6 @@ import (
 type KonnectivityAgent struct {
 	ManifestsDir           string
 	KonnectivityServerHost string
-	ServerCount            func() (uint, <-chan struct{})
 
 	configChangeChan chan *v1beta1.ClusterConfig
 	log              *logrus.Entry
@@ -45,22 +44,12 @@ func (k *KonnectivityAgent) Init(_ context.Context) error {
 func (k *KonnectivityAgent) Start(ctx context.Context) error {
 
 	go func() {
-		serverCount, serverCountChanged := k.ServerCount()
-
 		var clusterConfig *v1beta1.ClusterConfig
 		var retry <-chan time.Time
 		for {
 			select {
 			case config := <-k.configChangeChan:
 				clusterConfig = config
-
-			case <-serverCountChanged:
-				prevServerCount := serverCount
-				serverCount, serverCountChanged = k.ServerCount()
-				// write only if the server count actually changed
-				if serverCount == prevServerCount {
-					continue
-				}
 
 			case <-retry:
 				k.log.Info("Retrying to write konnectivity agent manifest")
@@ -76,7 +65,7 @@ func (k *KonnectivityAgent) Start(ctx context.Context) error {
 				continue
 			}
 
-			if err := k.writeKonnectivityAgent(clusterConfig, serverCount); err != nil {
+			if err := k.writeKonnectivityAgent(clusterConfig); err != nil {
 				k.log.Errorf("failed to write konnectivity agent manifest: %v", err)
 				retry = time.After(10 * time.Second)
 				continue
@@ -98,7 +87,7 @@ func (k *KonnectivityAgent) Stop() error {
 	return nil
 }
 
-func (k *KonnectivityAgent) writeKonnectivityAgent(clusterConfig *v1beta1.ClusterConfig, serverCount uint) error {
+func (k *KonnectivityAgent) writeKonnectivityAgent(clusterConfig *v1beta1.ClusterConfig) error {
 	konnectivityDir := filepath.Join(k.ManifestsDir, "konnectivity")
 	err := dir.Init(konnectivityDir, constant.ManifestsDirMode)
 	if err != nil {
@@ -109,7 +98,6 @@ func (k *KonnectivityAgent) writeKonnectivityAgent(clusterConfig *v1beta1.Cluste
 		ProxyServerHost: k.KonnectivityServerHost,
 		ProxyServerPort: uint16(clusterConfig.Spec.Konnectivity.AgentPort),
 		Image:           clusterConfig.Spec.Images.Konnectivity.URI(),
-		ServerCount:     serverCount,
 		PullPolicy:      clusterConfig.Spec.Images.DefaultPullPolicy,
 	}
 
@@ -184,7 +172,6 @@ type konnectivityAgentConfig struct {
 	ProxyServerHost string
 	ProxyServerPort uint16
 	Image           string
-	ServerCount     uint
 	PullPolicy      string
 	HostNetwork     bool
 }
@@ -205,6 +192,34 @@ subjects:
     kind: User
     name: system:konnectivity-server
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: system:konnectivity-server
+  namespace: kube-system
+  labels:
+    kubernetes.io/cluster-service: "true"
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["create", "get", "list", "watch", "update", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: system:konnectivity-server
+  namespace: kube-system
+  labels:
+    kubernetes.io/cluster-service: "true"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: system:konnectivity-server
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: system:konnectivity-server
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -212,6 +227,32 @@ metadata:
   namespace: kube-system
   labels:
     kubernetes.io/cluster-service: "true"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:konnectivity-agent
+  labels:
+    kubernetes.io/cluster-service: "true"
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:konnectivity-agent
+  labels:
+    kubernetes.io/cluster-service: "true"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:konnectivity-agent
+subjects:
+  - kind: ServiceAccount
+    name: konnectivity-agent
+    namespace: kube-system
 ---
 apiVersion: apps/v1
 # Alternatively, you can deploy the agents as Deployments. It is not necessary
@@ -253,11 +294,6 @@ spec:
           imagePullPolicy: {{ .PullPolicy }}
           name: konnectivity-agent
           env:
-              # the variable is not in a use
-              # we need it to have agent restarted on server count change
-              - name: K0S_CONTROLLER_COUNT
-                value: "{{ .ServerCount }}"
-
               - name: NODE_IP
                 valueFrom:
                   fieldRef:
@@ -270,6 +306,7 @@ spec:
             - --service-account-token-path=/var/run/secrets/tokens/konnectivity-agent-token
             - --agent-identifiers=host=$(NODE_IP)
             - --agent-id=$(NODE_IP)
+			- --count-server-leases=true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
