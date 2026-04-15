@@ -176,6 +176,7 @@ type konnectivityAgentConfig struct {
 	HostNetwork     bool
 }
 
+// See the example in [apiserver-network-proxy](https://github.com/carreter/apiserver-network-proxy/blob/714d09261101800120373cb1a3bb10278f32220d/examples/kind-multinode/templates/k8s/konnectivity-agent-ds.yaml)
 const konnectivityAgentTemplate = `
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

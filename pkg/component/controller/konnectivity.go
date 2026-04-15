@@ -90,6 +90,7 @@ func (k *Konnectivity) Start(ctx context.Context) error {
 	return nil
 }
 
+// See the example in [apiserver-network-proxy](https://github.com/carreter/apiserver-network-proxy/blob/714d09261101800120373cb1a3bb10278f32220d/examples/kind-multinode/templates/k8s/konnectivity-server.yaml)
 func (k *Konnectivity) serverArgs() []string {
 	return stringmap.StringMap{
 		"--uds-name":                 filepath.Join(k.K0sVars.KonnectivitySocketDir, "konnectivity-server.sock"),
