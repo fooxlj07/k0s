@@ -178,63 +178,16 @@ type konnectivityAgentConfig struct {
 
 // See the example in [apiserver-network-proxy](https://github.com/carreter/apiserver-network-proxy/blob/714d09261101800120373cb1a3bb10278f32220d/examples/kind-multinode/templates/k8s/konnectivity-agent-ds.yaml)
 const konnectivityAgentTemplate = `
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: system:konnectivity-server
-  labels:
-    kubernetes.io/cluster-service: "true"
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: system:auth-delegator
-subjects:
-  - apiGroup: rbac.authorization.k8s.io
-    kind: User
-    name: system:konnectivity-server
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: system:konnectivity-server
-  namespace: kube-system
-  labels:
-    kubernetes.io/cluster-service: "true"
-rules:
-  - apiGroups: ["coordination.k8s.io"]
-    resources: ["leases"]
-    verbs: ["create", "get", "list", "watch", "update", "delete"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: system:konnectivity-server
-  namespace: kube-system
-  labels:
-    kubernetes.io/cluster-service: "true"
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: system:konnectivity-server
-subjects:
-  - apiGroup: rbac.authorization.k8s.io
-    kind: User
-    name: system:konnectivity-server
----
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: konnectivity-agent
   namespace: kube-system
-  labels:
-    kubernetes.io/cluster-service: "true"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: system:konnectivity-agent
-  labels:
-    kubernetes.io/cluster-service: "true"
 rules:
   - apiGroups: ["coordination.k8s.io"]
     resources: ["leases"]
@@ -244,8 +197,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: system:konnectivity-agent
-  labels:
-    kubernetes.io/cluster-service: "true"
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -307,7 +258,7 @@ spec:
             - --service-account-token-path=/var/run/secrets/tokens/konnectivity-agent-token
             - --agent-identifiers=host=$(NODE_IP)
             - --agent-id=$(NODE_IP)
-			- --count-server-leases=true
+            - --count-server-leases=true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
